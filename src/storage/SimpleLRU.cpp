@@ -53,11 +53,12 @@ namespace Backend {
     }
 
     bool SimpleLRU::_set_node_new_value(lru_node& node_found, const std::string &value) {
-        move_node_to_tail(node_found);
-
         if (node_found.key.size() + value.size() > _max_size) { //checking size
             return false;
         }
+
+        move_node_to_tail(node_found);
+
 
         while (_cur_size + value.size() - node_found.value.size() > _max_size) { //deleting lru
             delete_lru_node();
