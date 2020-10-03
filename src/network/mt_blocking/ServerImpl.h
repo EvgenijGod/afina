@@ -2,7 +2,10 @@
 #define AFINA_NETWORK_MT_BLOCKING_SERVER_H
 
 #include <atomic>
+#include <condition_variable>
+#include <mutex>
 #include <thread>
+#include <unordered_set>
 
 #include <afina/network/Server.h>
 
@@ -15,44 +18,53 @@ namespace Network {
 namespace MTblocking {
 
 /**
- * # Network resource manager implementation
- * Server that is spawning a separate thread for each connection
- */
-class ServerImpl : public Server {
-public:
-    ServerImpl(std::shared_ptr<Afina::Storage> ps, std::shared_ptr<Logging::Service> pl);
-    ~ServerImpl();
+* # Network resource manager implementation
+* Server that is spawning a separate thread for each connection
+*/
+    class ServerImpl : public Server {
+    public:
+        ServerImpl(std::shared_ptr<Afina::Storage> ps, std::shared_ptr<Logging::Service> pl);
+        ~ServerImpl();
 
-    // See Server.h
-    void Start(uint16_t port, uint32_t, uint32_t) override;
+        // See Server.h
+        void Start(uint16_t port, uint32_t, uint32_t) override;
 
-    // See Server.h
-    void Stop() override;
+        // See Server.h
+        void Stop() override;
 
-    // See Server.h
-    void Join() override;
+        // See Server.h
+        void Join() override;
 
-protected:
-    /**
-     * Method is running in the connection acceptor thread
-     */
-    void OnRun();
+    protected:
+        /**
+         * Method is running in the connection acceptor thread
+         */
+        void OnRun();
 
-private:
-    // Logger instance
-    std::shared_ptr<spdlog::logger> _logger;
+        void Worker(int client_socket);
 
-    // Atomic flag to notify threads when it is time to stop. Note that
-    // flag must be atomic in order to safely publisj changes cross thread
-    // bounds
-    std::atomic<bool> running;
+    private:
+        // Logger instance
+        std::shared_ptr<spdlog::logger> _logger;
 
-    // Server socket to accept connections on
-    int _server_socket;
+        // Atomic flag to notify threads when it is time to stop. Note that
+        // flag must be atomic in order to safely publisj changes cross thread
+        // bounds
+        std::atomic<bool> running;
 
-    // Thread to run network on
-    std::thread _thread;
-};
+        // Server socket to accept connections on
+        int _server_socket;
+
+        // Thread to run network on
+        std::thread _thread;
+
+        uint32_t max_workers;
+        std::mutex workers_mutex;
+
+        std::condition_variable workers_finished;
+
+        std::unordered_set<int> _sockets;
+    };
 
 } // namespace MTblocking
 } // namespace Network
