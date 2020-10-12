@@ -19,11 +19,12 @@ class StripedLRU : public Afina::Storage{
     std::vector<std::unique_ptr<ThreadSafeSimplLRU>> stripe_regions;
 public:
     ~StripedLRU() {}
-    explicit StripedLRU(std::size_t stripe_count = 1024, std::size_t memory_limit = 1024 * 1000)
+
+
+    StripedLRU(std::size_t stripe_count = 1024, std::size_t memory_limit = 1024 * 1000)
         : stripe_count(stripe_count) {
         for (size_t i = 0; i < stripe_count; i++) {
-            stripe_regions.push_back(
-                    static_cast<std::unique_ptr<ThreadSafeSimplLRU>>(new ThreadSafeSimplLRU(memory_limit)));
+            stripe_regions.emplace_back(new ThreadSafeSimplLRU(memory_limit));
 
         }
     }
@@ -42,8 +43,12 @@ public:
     bool Get(const std::string &key, std::string &value) override ;
 
 };
+
+StripedLRU* BuildStripedLRU(std::size_t memory_limit, std::size_t stripe_count);
+
 }
 }
+
 
 
 
