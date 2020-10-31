@@ -169,7 +169,7 @@ void ServerImpl::Worker(int client_socket) {
     try {
         int all_readed_bytes = 0;
         int readed_bytes = -1;
-        char client_buffer[4096];
+        char client_buffer[4096] = {};
         while ((readed_bytes = read(client_socket, client_buffer + all_readed_bytes,
                                     sizeof(client_buffer) - all_readed_bytes)) > 0) {
             _logger->debug("Got {} bytes from socket", readed_bytes);
@@ -262,9 +262,8 @@ void ServerImpl::Worker(int client_socket) {
     }
 
     // We are done with this connection
-    close(client_socket);
-
     std::unique_lock<std::mutex> _lock(sockets_mutex);
+    close(client_socket);
     _sockets.erase(client_socket);
 }
 
