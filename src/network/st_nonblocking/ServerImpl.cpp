@@ -122,7 +122,7 @@ void ServerImpl::OnRun() {
     }
 
     bool run = true;
-    std::array<struct epoll_event, 64> mod_list;
+    std::array<struct epoll_event, 64> mod_list{};
     while (run) {
         int nmod = epoll_wait(epoll_descr, &mod_list[0], mod_list.size(), -1);
         _logger->debug("Acceptor wokeup: {} events", nmod);
@@ -137,15 +137,24 @@ void ServerImpl::OnRun() {
                 OnNewConnection(epoll_descr);
                 continue;
             }
-
             // That is some connection!
             Connection *pc = static_cast<Connection *>(current_event.data.ptr);
 
             auto old_mask = pc->_event.events;
             if ((current_event.events & EPOLLERR) || (current_event.events & EPOLLHUP)) {
+                _logger->error("Error on socket {}", pc->_socket);
+                if (epoll_ctl(epoll_descr, EPOLL_CTL_DEL, pc->_socket, &pc->_event)) {
+                    _logger->error("Failed to delete connection from epoll");
+                }
+
+                close(pc->_socket);
                 pc->OnError();
+
+                delete pc;
+                continue;
             } else if (current_event.events & EPOLLRDHUP) {
-                pc->OnClose();
+                _logger->debug("Epolldrhup");
+                pc->Close();
             } else {
                 // Depends on what connection wants...
                 if (current_event.events & EPOLLIN) {
@@ -157,7 +166,7 @@ void ServerImpl::OnRun() {
             }
 
             // Does it alive?
-            if (!pc->isAlive()) {
+            if (pc->isAlive() == false) {
                 if (epoll_ctl(epoll_descr, EPOLL_CTL_DEL, pc->_socket, &pc->_event)) {
                     _logger->error("Failed to delete connection from epoll");
                 }
@@ -187,7 +196,7 @@ void ServerImpl::OnNewConnection(int epoll_descr) {
         socklen_t in_len;
 
         // No need to make these sockets non blocking since accept4() takes care of it.
-        in_len = sizeof in_addr;
+        in_len = sizeof(in_addr);
         int infd = accept4(_server_socket, &in_addr, &in_len, SOCK_NONBLOCK | SOCK_CLOEXEC);
         if (infd == -1) {
             if ((errno == EAGAIN) || (errno == EWOULDBLOCK)) {
@@ -201,13 +210,13 @@ void ServerImpl::OnNewConnection(int epoll_descr) {
         // Print host and service info.
         char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
         int retval =
-            getnameinfo(&in_addr, in_len, hbuf, sizeof hbuf, sbuf, sizeof sbuf, NI_NUMERICHOST | NI_NUMERICSERV);
+                getnameinfo(&in_addr, in_len, hbuf, sizeof hbuf, sbuf, sizeof sbuf, NI_NUMERICHOST | NI_NUMERICSERV);
         if (retval == 0) {
             _logger->info("Accepted connection on descriptor {} (host={}, port={})\n", infd, hbuf, sbuf);
         }
 
         // Register the new FD to be monitored by epoll.
-        Connection *pc = new(std::nothrow) Connection(infd);
+        Connection *pc = new Connection(infd, pStorage);
         if (pc == nullptr) {
             throw std::runtime_error("Failed to allocate connection");
         }
