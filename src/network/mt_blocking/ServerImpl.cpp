@@ -39,7 +39,7 @@ namespace MTblocking {
         _logger->info("Start mt_blocking network service");
 
         max_workers = n_workers;
-        _sockets = {};
+        cnt_workers = 0;
 
         sigset_t sig_mask;
         sigemptyset(&sig_mask);
@@ -89,6 +89,7 @@ namespace MTblocking {
     void ServerImpl::Join() {
         assert(_thread.joinable());
         _thread.join();
+        close(_server_socket);
     }
 
 // See Server.h
@@ -125,27 +126,26 @@ namespace MTblocking {
                 setsockopt(client_socket, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof tv);
             }
 
-            // Start new thread and process data from/to connection
             std::unique_lock<std::mutex> _lock(workers_mutex);
-            if (_sockets.size() < max_workers) {
-                _sockets.insert(client_socket);
+            if (cnt_workers < max_workers) {
+                cnt_workers++;
                 _lock.unlock();
                 std::thread new_worker(&ServerImpl::Worker, this, client_socket);
                 new_worker.detach();
             } else {
                 _lock.unlock();
+                static const std::string msg = "Server is overload";
+                if (send(client_socket, msg.data(), msg.size(), 0) <= 0) {
+                    _logger->error("Failed to write response to client: {}", strerror(errno));
+                }
                 close(client_socket);
             }
         }
 
         // Cleanup on exit...
-        close(_server_socket);
         {
             std::unique_lock<std::mutex> _lock(workers_mutex);
-            for (auto socket : _sockets) {
-                shutdown(socket, SHUT_RD);
-            }
-            while (_sockets.size() > 0) {
+            while (cnt_workers) {
                 workers_finished.wait(_lock);
             }
         }
@@ -222,10 +222,6 @@ namespace MTblocking {
                     if (command_to_execute && arg_remains == 0) {
                         _logger->debug("Start command execution");
 
-                        if (argument_for_command.size() > 0) {
-                            assert(argument_for_command.size() > 2);
-                            argument_for_command.resize(argument_for_command.size() - 2);
-                        }
                         std::string result;
                         command_to_execute->Execute(*pStorage, argument_for_command, result);
 
@@ -263,8 +259,8 @@ namespace MTblocking {
         close(client_socket);
 
         std::unique_lock<std::mutex> _lock(workers_mutex);
-        _sockets.erase(client_socket);
-        if (!running && _sockets.size() == 0) {
+        cnt_workers--;
+        if (!running && !cnt_workers) {
             workers_finished.notify_one();
         }
     }

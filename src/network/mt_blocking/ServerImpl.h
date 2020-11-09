@@ -5,7 +5,6 @@
 #include <condition_variable>
 #include <mutex>
 #include <thread>
-#include <unordered_set>
 
 #include <afina/network/Server.h>
 
@@ -21,50 +20,49 @@ namespace MTblocking {
 * # Network resource manager implementation
 * Server that is spawning a separate thread for each connection
 */
-    class ServerImpl : public Server {
-    public:
-        ServerImpl(std::shared_ptr<Afina::Storage> ps, std::shared_ptr<Logging::Service> pl);
-        ~ServerImpl();
+class ServerImpl : public Server {
+public:
+    ServerImpl(std::shared_ptr<Afina::Storage> ps, std::shared_ptr<Logging::Service> pl);
+    ~ServerImpl();
 
-        // See Server.h
-        void Start(uint16_t port, uint32_t, uint32_t) override;
+    // See Server.h
+    void Start(uint16_t port, uint32_t, uint32_t) override;
 
-        // See Server.h
-        void Stop() override;
+    // See Server.h
+    void Stop() override;
 
-        // See Server.h
-        void Join() override;
+    // See Server.h
+    void Join() override;
 
-    protected:
-        /**
-         * Method is running in the connection acceptor thread
-         */
-        void OnRun();
+protected:
+    /**
+     * Method is running in the connection acceptor thread
+     */
+    void OnRun();
 
-        void Worker(int client_socket);
+    void Worker(int client_socket);
 
-    private:
-        // Logger instance
-        std::shared_ptr<spdlog::logger> _logger;
+private:
+    // Logger instance
+    std::shared_ptr<spdlog::logger> _logger;
 
-        // Atomic flag to notify threads when it is time to stop. Note that
-        // flag must be atomic in order to safely publisj changes cross thread
-        // bounds
-        std::atomic<bool> running;
+    // Atomic flag to notify threads when it is time to stop. Note that
+    // flag must be atomic in order to safely publisj changes cross thread
+    // bounds
+    std::atomic<bool> running;
 
-        // Server socket to accept connections on
-        int _server_socket;
+    // Server socket to accept connections on
+    int _server_socket;
 
-        // Thread to run network on
-        std::thread _thread;
+    // Thread to run network on
+    std::thread _thread;
 
-        uint32_t max_workers;
-        std::mutex workers_mutex;
+    uint32_t cnt_workers;
+    uint32_t max_workers;
+    std::mutex workers_mutex;
 
-        std::condition_variable workers_finished;
-
-        std::unordered_set<int> _sockets;
-    };
+    std::condition_variable workers_finished;
+};
 
 } // namespace MTblocking
 } // namespace Network
