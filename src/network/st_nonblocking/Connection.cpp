@@ -93,7 +93,7 @@ void Connection::DoRead() {
             } else if (read_end == buf_size) {
                 std::memmove(read_buf, read_buf + read_begin, read_end - read_begin);
             }
-        } else {
+        } else if (readed_bytes == -1){
             is_alive = false;
         }
     } catch (std::runtime_error &ex) {
@@ -111,6 +111,7 @@ void Connection::DoWrite() {
     size_t write_vec_v = 0;
     {
         auto it = responses.begin();
+        //write_vec[write_vec_v].iov_base = (void *) (it->data() + shift); ?
         write_vec[write_vec_v].iov_base = &((*it)[0]) + shift;
         write_vec[write_vec_v].iov_len = it->size() - shift;
         it++;
@@ -124,7 +125,7 @@ void Connection::DoWrite() {
         }
     }
 
-    int writed;
+    int writed = 0;
     if ((writed = writev(_socket, write_vec, write_vec_v)) > 0) {
         size_t i = 0;
         while (i < write_vec_v && writed >= write_vec[i].iov_len) {
@@ -134,7 +135,7 @@ void Connection::DoWrite() {
             i++;
         }
         shift = writed;
-    } else {
+    } else if (!(writed == 0 || writed == EAGAIN)){
         is_alive = false;
     }
 
