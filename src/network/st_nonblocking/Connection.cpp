@@ -14,7 +14,7 @@ void Connection::Start() {
     is_alive = true;
     read_begin = read_end = 0;
     shift = 0;
-    _event.events = EPOLLIN;
+    _event.events = EPOLLIN | EPOLLRDHUP | EPOLLERR;
 }
 
 // See Connection.h
@@ -36,6 +36,9 @@ void Connection::Close() {
 
 // See Connection.h
 void Connection::DoRead() {
+    if (responses.size() > N){
+        _event.events = ~EPOLLIN;
+    }
     try {
         if ((readed_bytes = read(_socket, read_buf + read_end, buf_size - read_end)) > 0) {
             read_end += readed_bytes;
@@ -135,12 +138,15 @@ void Connection::DoWrite() {
             i++;
         }
         shift = writed;
-    } else if (!(writed == 0 || writed == EAGAIN)){
+    } else if (writed < 0 && writed != EAGAIN){
         is_alive = false;
     }
 
     if (responses.empty()) {
         _event.events &= ~EPOLLOUT;
+    }
+    if (responses.size() <= N){
+        _event.events &= EPOLLIN;
     }
 }
 
