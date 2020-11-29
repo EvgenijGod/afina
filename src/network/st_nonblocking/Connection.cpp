@@ -36,9 +36,6 @@ void Connection::Close() {
 
 // See Connection.h
 void Connection::DoRead() {
-    if (responses.size() > N){
-        _event.events = ~EPOLLIN;
-    }
     try {
         if ((readed_bytes = read(_socket, read_buf + read_end, buf_size - read_end)) > 0) {
             read_end += readed_bytes;
@@ -81,6 +78,9 @@ void Connection::DoRead() {
                     // Put response in the queue
                     result += "\r\n";
                     responses.push_back(std::move(result));
+                    if (responses.size() > N){
+                        _event.events &= ~EPOLLIN;
+                    }
                     if (!(_event.events & EPOLLOUT)) {
                         _event.events |= EPOLLOUT;
                     }
@@ -146,7 +146,7 @@ void Connection::DoWrite() {
         _event.events &= ~EPOLLOUT;
     }
     if (responses.size() <= N){
-        _event.events &= EPOLLIN;
+        _event.events |= EPOLLIN;
     }
 }
 

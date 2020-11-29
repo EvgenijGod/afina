@@ -34,7 +34,9 @@ ServerImpl::ServerImpl(std::shared_ptr<Afina::Storage> ps, std::shared_ptr<Loggi
 // See Server.h
 ServerImpl::~ServerImpl() {
     Stop();
-    Join();
+    if (_work_thread.joinable()) {
+        Join();
+    }
 }
 
 // See Server.h
@@ -177,7 +179,7 @@ void ServerImpl::OnRun() {
                 if (epoll_ctl(epoll_descr, EPOLL_CTL_DEL, pc->_socket, &pc->_event)) {
                     _logger->error("Failed to delete connection from epoll");
                 }
-
+                connection_storage.erase(pc);
                 close(pc->_socket);
                 pc->OnClose();
 
