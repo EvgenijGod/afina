@@ -97,7 +97,7 @@ void ServerImpl::Start(uint16_t port, uint32_t n_acceptors, uint32_t n_workers) 
 
     _workers.reserve(n_workers);
     for (int i = 0; i < n_workers; i++) {
-        _workers.emplace_back(pStorage, pLogging);
+        _workers.emplace_back(pStorage, pLogging, this);
         _workers.back().Start(_data_epoll_fd);
     }
 
@@ -115,22 +115,39 @@ void ServerImpl::Stop() {
     for (auto &w : _workers) {
         w.Stop();
     }
-
     // Wakeup threads that are sleep on epoll_wait
     if (eventfd_write(_event_fd, 1)) {
         throw std::runtime_error("Failed to wakeup workers");
     }
+    {
+        std::lock_guard<std::mutex> lock(m);
+        for (auto connection : connections) {
+            shutdown(connection->_socket, SHUT_RD);
+        }
+    }
+    shutdown(_server_socket, SHUT_RDWR);
 }
 
 // See Server.h
 void ServerImpl::Join() {
+    //std::unique_lock<std::mutex> lock(m);
     for (auto &t : _acceptors) {
         t.join();
     }
-
+    _acceptors.clear();
     for (auto &w : _workers) {
         w.Join();
     }
+    _workers.clear();
+    {
+        std::lock_guard<std::mutex> lock(m);
+        for (auto connection : connections) {
+            close(connection->_socket);
+            delete connection;
+        }
+        connections.clear();
+    }
+    close(_server_socket);
 }
 
 // See ServerImpl.h
@@ -177,12 +194,7 @@ void ServerImpl::OnRun() {
                 in_len = sizeof in_addr;
                 int infd = accept4(_server_socket, &in_addr, &in_len, SOCK_NONBLOCK | SOCK_CLOEXEC);
                 if (infd == -1) {
-                    if ((errno == EAGAIN) || (errno == EWOULDBLOCK)) {
-                        break; // We have processed all incoming connections.
-                    } else {
-                        _logger->error("Failed to accept socket");
-                        break;
-                    }
+                    break;
                 }
 
                 // Print host and service info.
@@ -209,11 +221,21 @@ void ServerImpl::OnRun() {
                         pc->OnError();
                         delete pc;
                     }
+                } else {
+                    std::unique_lock<std::mutex> lock(m);
+                    connections.emplace(pc);
                 }
             }
         }
     }
     _logger->warn("Acceptor stopped");
+}
+
+void ServerImpl::delete_connection(Connection* conn){
+    std::unique_lock<std::mutex> lock(m);
+    connections.erase(conn);
+    close(conn->_socket);
+    delete conn;
 }
 
 } // namespace MTnonblock
