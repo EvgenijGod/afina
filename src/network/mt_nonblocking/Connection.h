@@ -10,6 +10,7 @@
 
 #include <afina/Storage.h>
 #include <afina/execute/Command.h>
+#include <atomic>
 
 #include "protocol/Parser.h"
 
@@ -57,11 +58,12 @@ private:
     std::deque<std::string> responses;
     size_t shift;
 
-    bool is_alive, is_started;
-
+    bool is_started;
+    std::atomic<bool> is_alive;
     std::shared_ptr<Afina::Storage> pStorage;
 
-    std::mutex con_mutex;
+    //std::mutex con_mutex;
+    size_t N = 512;
 };
 
 } // namespace MTnonblock

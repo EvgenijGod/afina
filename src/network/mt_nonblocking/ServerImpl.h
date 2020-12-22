@@ -3,7 +3,8 @@
 
 #include <thread>
 #include <vector>
-
+#include <set>
+#include "Connection.h"
 #include <afina/network/Server.h>
 
 namespace spdlog {
