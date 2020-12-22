@@ -19,7 +19,7 @@ void Connection::Start() {
     is_started = true;
     read_begin = read_end = 0;
     shift = 0;
-    _event.events = EPOLLIN|EPOLLERR|EPOLLRDHUP|EPOLLET;
+    _event.events = EPOLLIN|EPOLLERR|EPOLLRDHUP;
     _event.data.fd = _socket;
     _event.data.ptr = this;
 }
