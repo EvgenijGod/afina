@@ -58,6 +58,8 @@ private:
     bool is_alive;
 
     std::shared_ptr<Afina::Storage> pStorage;
+
+    size_t N = 512;
 };
 
 } // namespace STnonblock

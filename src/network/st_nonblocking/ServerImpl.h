@@ -3,6 +3,8 @@
 
 #include <thread>
 #include <vector>
+#include "Connection.h"
+#include <set>
 
 #include <afina/network/Server.h>
 
@@ -56,6 +58,7 @@ private:
 
     // IO thread
     std::thread _work_thread;
+    std::set<Connection *> connection_storage;
 };
 
 } // namespace STnonblock

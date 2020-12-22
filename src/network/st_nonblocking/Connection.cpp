@@ -14,7 +14,7 @@ void Connection::Start() {
     is_alive = true;
     read_begin = read_end = 0;
     shift = 0;
-    _event.events = EPOLLIN;
+    _event.events = EPOLLIN | EPOLLRDHUP | EPOLLERR;
 }
 
 // See Connection.h
@@ -78,6 +78,9 @@ void Connection::DoRead() {
                     // Put response in the queue
                     result += "\r\n";
                     responses.push_back(std::move(result));
+                    if (responses.size() > N){
+                        _event.events &= ~EPOLLIN;
+                    }
                     if (!(_event.events & EPOLLOUT)) {
                         _event.events |= EPOLLOUT;
                     }
@@ -93,7 +96,7 @@ void Connection::DoRead() {
             } else if (read_end == buf_size) {
                 std::memmove(read_buf, read_buf + read_begin, read_end - read_begin);
             }
-        } else {
+        } else if (readed_bytes == -1){
             is_alive = false;
         }
     } catch (std::runtime_error &ex) {
@@ -111,6 +114,7 @@ void Connection::DoWrite() {
     size_t write_vec_v = 0;
     {
         auto it = responses.begin();
+        //write_vec[write_vec_v].iov_base = (void *) (it->data() + shift); ?
         write_vec[write_vec_v].iov_base = &((*it)[0]) + shift;
         write_vec[write_vec_v].iov_len = it->size() - shift;
         it++;
@@ -124,7 +128,7 @@ void Connection::DoWrite() {
         }
     }
 
-    int writed;
+    int writed = 0;
     if ((writed = writev(_socket, write_vec, write_vec_v)) > 0) {
         size_t i = 0;
         while (i < write_vec_v && writed >= write_vec[i].iov_len) {
@@ -134,12 +138,15 @@ void Connection::DoWrite() {
             i++;
         }
         shift = writed;
-    } else {
+    } else if (writed < 0 && writed != EAGAIN){
         is_alive = false;
     }
 
     if (responses.empty()) {
         _event.events &= ~EPOLLOUT;
+    }
+    if (responses.size() <= N){
+        _event.events |= EPOLLIN;
     }
 }
 

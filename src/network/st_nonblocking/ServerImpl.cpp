@@ -32,7 +32,25 @@ namespace STnonblock {
 ServerImpl::ServerImpl(std::shared_ptr<Afina::Storage> ps, std::shared_ptr<Logging::Service> pl) : Server(ps, pl) {}
 
 // See Server.h
-ServerImpl::~ServerImpl() {}
+ServerImpl::~ServerImpl() {
+    Stop();
+    if (_work_thread.joinable()) {
+        Join();
+    }
+}
+
+// See Server.h
+void ServerImpl::Stop() {
+    _logger->warn("Stop network service");
+    for (auto c : connection_storage){
+        shutdown(c->_socket, SHUT_WR);
+    }
+    // Wakeup threads that are sleep on epoll_wait
+    if (eventfd_write(_event_fd, 1)) {
+        throw std::runtime_error("Failed to wakeup workers");
+    }
+    close(_server_socket);
+}
 
 // See Server.h
 void ServerImpl::Start(uint16_t port, uint32_t n_acceptors, uint32_t n_workers) {
@@ -84,16 +102,6 @@ void ServerImpl::Start(uint16_t port, uint32_t n_acceptors, uint32_t n_workers) 
 }
 
 // See Server.h
-void ServerImpl::Stop() {
-    _logger->warn("Stop network service");
-
-    // Wakeup threads that are sleep on epoll_wait
-    if (eventfd_write(_event_fd, 1)) {
-        throw std::runtime_error("Failed to wakeup workers");
-    }
-}
-
-// See Server.h
 void ServerImpl::Join() {
     // Wait for work to be complete
     _work_thread.join();
@@ -139,6 +147,7 @@ void ServerImpl::OnRun() {
             }
             // That is some connection!
             Connection *pc = static_cast<Connection *>(current_event.data.ptr);
+            connection_storage.insert(pc);
 
             auto old_mask = pc->_event.events;
             if ((current_event.events & EPOLLERR) || (current_event.events & EPOLLHUP)) {
@@ -171,7 +180,7 @@ void ServerImpl::OnRun() {
                 if (epoll_ctl(epoll_descr, EPOLL_CTL_DEL, pc->_socket, &pc->_event)) {
                     _logger->error("Failed to delete connection from epoll");
                 }
-
+                connection_storage.erase(pc);
                 close(pc->_socket);
                 pc->OnClose();
 
@@ -179,7 +188,7 @@ void ServerImpl::OnRun() {
             } else if (pc->_event.events != old_mask) {
                 if (epoll_ctl(epoll_descr, EPOLL_CTL_MOD, pc->_socket, &pc->_event)) {
                     _logger->error("Failed to change connection event mask");
-
+                    connection_storage.erase(pc);
                     close(pc->_socket);
                     pc->OnClose();
 
@@ -188,6 +197,12 @@ void ServerImpl::OnRun() {
             }
         }
     }
+    for (auto single_connection : connection_storage){
+        close(single_connection->_socket);
+        single_connection->OnClose();
+        delete single_connection;
+    }
+    connection_storage.clear();
     _logger->warn("Acceptor stopped");
 }
 
