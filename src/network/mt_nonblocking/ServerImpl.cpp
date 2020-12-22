@@ -34,6 +34,8 @@ ServerImpl::ServerImpl(std::shared_ptr<Afina::Storage> ps, std::shared_ptr<Loggi
 
 // See Server.h
 ServerImpl::~ServerImpl() {
+    Stop();
+    Join();
 }
 
 // See Server.h
@@ -214,7 +216,7 @@ void ServerImpl::OnRun() {
                 // Register connection in worker's epoll
                 pc->Start();
                 if (pc->isAlive()) {
-                    pc->_event.events |= EPOLLONESHOT;
+                    pc->_event.events |= EPOLLONESHOT | EPOLLEXCLUSIVE;
                     int epoll_ctl_retval;
                     if ((epoll_ctl_retval = epoll_ctl(_data_epoll_fd, EPOLL_CTL_ADD, pc->_socket, &pc->_event))) {
                         _logger->debug("epoll_ctl failed during connection register in workers'epoll: error {}", epoll_ctl_retval);
