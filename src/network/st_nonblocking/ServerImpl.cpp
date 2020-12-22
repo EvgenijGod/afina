@@ -167,6 +167,7 @@ void ServerImpl::OnRun() {
             } else {
                 // Depends on what connection wants...
                 if (current_event.events & EPOLLIN) {
+
                     pc->DoRead();
                 }
                 if (current_event.events & EPOLLOUT) {

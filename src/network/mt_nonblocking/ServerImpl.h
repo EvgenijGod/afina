@@ -3,8 +3,12 @@
 
 #include <thread>
 #include <vector>
+#include <set>
+#include <mutex>
 
 #include <afina/network/Server.h>
+#include "Connection.h"
+
 
 namespace spdlog {
 class logger;
@@ -18,9 +22,9 @@ namespace MTnonblock {
 class Worker;
 
 /**
- * # Network resource manager implementation
- * Epoll based server
- */
+* # Network resource manager implementation
+* Epoll based server
+*/
 class ServerImpl : public Server {
 public:
     ServerImpl(std::shared_ptr<Afina::Storage> ps, std::shared_ptr<Logging::Service> pl);
@@ -34,6 +38,8 @@ public:
 
     // See Server.h
     void Join() override;
+
+    void delete_connection(Connection * conn);
 
 protected:
     void OnRun();
@@ -63,6 +69,9 @@ private:
 
     // threads serving read/write requests
     std::vector<Worker> _workers;
+
+    std::set<Connection*> connections;
+    std::mutex m;
 };
 
 } // namespace MTnonblock
