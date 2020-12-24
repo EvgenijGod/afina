@@ -11,12 +11,14 @@ Engine::~Engine() {
     for (auto coro = alive; coro != nullptr;) {
         auto tmp = coro;
         coro = coro->next;
+        delete [] std::get<0> (tmp->Stack);
         delete tmp;
     }
 
     for (auto coro = blocked; coro != nullptr;) {
         auto tmp = coro;
         coro = coro->next;
+        delete [] std::get<0> (tmp->Stack);
         delete tmp;
     }
 }

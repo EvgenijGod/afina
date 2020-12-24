@@ -176,6 +176,7 @@ public:
         }
 
         // Shutdown runtime
+        delete[] std::get<0> (idle_ctx->Stack);
         delete idle_ctx;
         this->StackBottom = nullptr;
     }
